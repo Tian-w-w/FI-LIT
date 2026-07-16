@@ -32,12 +32,11 @@ The template asset manifest intentionally fails until its placeholder paths are 
 
 ## 3. Build manifests and launch deliberately
 
-    python -m fi_lit build-superni-manifest \
+    python -m fi_lit build-superni-train-dev \
       --superni-root /opt/fi-lit/datasets/natural-instructions \
-      --output /opt/fi-lit/manifests/superni-train.jsonl --splits train
-    python -m fi_lit build-superni-manifest \
-      --superni-root /opt/fi-lit/datasets/natural-instructions \
-      --output /opt/fi-lit/manifests/superni-dev.jsonl --splits dev
+      --train-output /opt/fi-lit/manifests/superni-train.jsonl \
+      --dev-output /opt/fi-lit/manifests/superni-dev.jsonl \
+      --dev-task-count 50 --seed 42
 
     CUDA_VISIBLE_DEVICES=0,1 torchrun --standalone --nproc_per_node=2 \
       -m fi_lit.train --config configs/qlora_ddp_superni.yaml
@@ -47,4 +46,3 @@ Before the last command, inspect nvidia-smi, Python/Torch/CUDA compatibility, fr
 ## Reproducibility record
 
 For every server run, retain the Git commit SHA, copied configuration, private asset-manifest checksums, nvidia-smi output, package versions, command line, and resulting metrics. Do not add raw prompts, model checkpoints, or private filesystem paths to Git.
-
