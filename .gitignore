@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
+
+# Local experiment assets and outputs: never commit these.
+data/
+models/
+wheelhouse/
+outputs/
+runs/
+artifacts/
+*.safetensors
+*.bin
+*.pt
+*.pth
+*.ckpt
+
+# Generated manifests may contain source examples.
+manifests/
+*.manifest.jsonl
+
+# Local environment files
+.env
+

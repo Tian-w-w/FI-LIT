@@ -1,0 +1,48 @@
+# Safe to validate on a CPU-only machine. Replace only local offline-server paths.
+run_name: fi_lit_superni_qlora
+seed: 42
+
+model:
+  name_or_path: /opt/fi-lit/models/base-model
+  trust_remote_code: false
+  torch_dtype: bfloat16
+  quantization:
+    load_in_4bit: true
+    quant_type: nf4
+    double_quant: true
+    compute_dtype: bfloat16
+  lora:
+    r: 16
+    alpha: 32
+    dropout: 0.05
+    bias: none
+    target_modules: [q_proj, k_proj, v_proj, o_proj, gate_proj, up_proj, down_proj]
+
+data:
+  train_manifest: /opt/fi-lit/manifests/superni-train.jsonl
+  eval_manifest: /opt/fi-lit/manifests/superni-dev.jsonl
+  max_seq_length: 2048
+  prompt_template: definition_input_output_v1
+
+training:
+  output_dir: /opt/fi-lit/outputs/qlora-ddp-superni
+  per_device_train_batch_size: 1
+  per_device_eval_batch_size: 1
+  gradient_accumulation_steps: 16
+  learning_rate: 0.0002
+  num_train_epochs: 1
+  warmup_ratio: 0.03
+  logging_steps: 10
+  save_steps: 200
+  eval_steps: 200
+  bf16: true
+  tf32: true
+  gradient_checkpointing: true
+  report_to: []
+
+ddp:
+  enabled: true
+  launcher: torchrun
+  expected_world_size: 2
+  find_unused_parameters: false
+

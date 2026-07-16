@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "description": "Template only. Copy privately and replace placeholders with server paths and SHA-256 digests.",
+  "assets": [
+    {
+      "kind": "model",
+      "path": "/opt/fi-lit/models/base-model/config.json",
+      "sha256": ""
+    },
+    {
+      "kind": "dataset",
+      "path": "/opt/fi-lit/datasets/superni/tasks",
+      "sha256": ""
+    },
+    {
+      "kind": "wheelhouse",
+      "path": "/opt/fi-lit/wheelhouse",
+      "sha256": ""
+    }
+  ]
+}
+
