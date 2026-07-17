@@ -14,7 +14,9 @@ class SuperNIError(ValueError):
 
 
 def _task_id(value: str) -> str:
-    return Path(value.strip()).stem
+    """Normalize an optional .json suffix without truncating dots in task ids."""
+    name = Path(value.strip()).name
+    return name[:-5] if name.endswith(".json") else name
 
 
 def load_split_tasks(root: Union[str, Path], split: str) -> List[str]:

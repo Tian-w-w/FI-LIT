@@ -22,11 +22,11 @@ def test_build_train_dev_from_current_superni_layout_without_dev_file(tmp_path) 
     (root / "tasks").mkdir(parents=True)
     split_dir = root / "splits"
     split_dir.mkdir(parents=True)
-    (split_dir / "train_tasks.txt").write_text("task001.json\ntask002\ntask003\n", encoding="utf-8")
+    (split_dir / "train_tasks.txt").write_text("task001.json\ntask075_squad1.1_answer_generation\ntask003\n", encoding="utf-8")
     (split_dir / "test_tasks.txt").write_text("task004\n", encoding="utf-8")
     (split_dir / "excluded_tasks.txt").write_text("task005\n", encoding="utf-8")
     _write_task(root, "task001", "classification", ["one", "two"])
-    _write_task(root, "task002", "generation", ["three"])
+    _write_task(root, "task075_squad1.1_answer_generation", "generation", ["three"])
     _write_task(root, "task003", "generation", ["four"])
     _write_task(root, "task004", "test-only", ["five"])
 
@@ -40,7 +40,7 @@ def test_build_train_dev_from_current_superni_layout_without_dev_file(tmp_path) 
     assert summary["train"]["tasks"] == 2
     assert summary["dev"]["tasks"] == 1
     assert {row["task_id"] for row in train_rows}.isdisjoint({row["task_id"] for row in dev_rows})
-    assert {row["task_id"] for row in train_rows + dev_rows} == {"task001", "task002", "task003"}
+    assert {row["task_id"] for row in train_rows + dev_rows} == {"task001", "task075_squad1.1_answer_generation", "task003"}
     assert all(row["task_id"] != "task004" for row in train_rows + dev_rows)
 
 
