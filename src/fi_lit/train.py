@@ -16,6 +16,13 @@ def _format_record(record: Dict[str, Any]) -> str:
     return "Definition:\n{}\n\nInput:\n{}\n\nOutput:\n{}".format(definition, record["input"], output)
 
 
+def _cleanup_distributed_process_group(torch_module: Any) -> None:
+    """Release the NCCL process group on every rank after a distributed run."""
+    distributed = getattr(torch_module, "distributed", None)
+    if distributed is not None and distributed.is_available() and distributed.is_initialized():
+        distributed.destroy_process_group()
+
+
 def run_training(config: Dict[str, Any]) -> None:
     """Launch a job after local assets and dependencies are available.
 
@@ -110,7 +117,10 @@ def run_training(config: Dict[str, Any]) -> None:
         eval_dataset=tokenized["eval"],
         data_collator=DataCollatorForLanguageModeling(tokenizer, mlm=False),
     )
-    trainer.train()
+    try:
+        trainer.train()
+    finally:
+        _cleanup_distributed_process_group(torch)
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
