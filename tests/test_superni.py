@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import json
 
-from fi_lit.superni import build_manifest, build_train_dev_manifests
+import pytest
+
+from fi_lit.superni import SuperNIError, build_manifest, build_train_dev_manifests
 
 
 def _write_task(root, task_id: str, category: str, inputs: list) -> None:
@@ -70,3 +72,41 @@ def test_max_instances_limits_each_task_with_spilts_typo_layout(tmp_path) -> Non
     _write_task(root, "task001", "classification", ["one", "two"])
     summary = build_manifest(root, tmp_path / "out.jsonl", ["train"], max_instances_per_task=1)
     assert summary["examples"] == 1
+    assert summary["instance_selection"]["mode"] == "prefix_smoke"
+
+
+def test_seeded_instance_sampling_is_deterministic_and_preserves_source_ids(tmp_path) -> None:
+    root = tmp_path / "superni"
+    (root / "tasks").mkdir(parents=True)
+    split_dir = root / "splits" / "default"
+    split_dir.mkdir(parents=True)
+    (split_dir / "train_tasks.txt").write_text("task001\ntask002\n", encoding="utf-8")
+    _write_task(root, "task001", "classification", ["item{}".format(index) for index in range(10)])
+    _write_task(root, "task002", "generation", ["value{}".format(index) for index in range(10)])
+
+    first = tmp_path / "first.jsonl"
+    second = tmp_path / "second.jsonl"
+    summary = build_manifest(root, first, ["train"], instances_per_task=3, instance_seed=42)
+    build_manifest(root, second, ["train"], instances_per_task=3, instance_seed=42)
+    rows = [json.loads(line) for line in first.read_text(encoding="utf-8").splitlines()]
+
+    assert first.read_bytes() == second.read_bytes()
+    assert len(rows) == 6
+    assert summary["instance_selection"] == {
+        "mode": "seeded_random",
+        "instances_per_task": 3,
+        "instance_seed": 42,
+    }
+    assert all(int(row["id"].rsplit(":", 1)[1]) < 10 for row in rows)
+
+
+def test_prefix_and_seeded_sampling_cannot_be_combined(tmp_path) -> None:
+    root = tmp_path / "superni"
+    (root / "tasks").mkdir(parents=True)
+    split_dir = root / "splits"
+    split_dir.mkdir(parents=True)
+    (split_dir / "train_tasks.txt").write_text("task001\n", encoding="utf-8")
+    _write_task(root, "task001", "classification", ["one", "two"])
+
+    with pytest.raises(SuperNIError, match="either"):
+        build_manifest(root, tmp_path / "out.jsonl", ["train"], max_instances_per_task=1, instances_per_task=1)

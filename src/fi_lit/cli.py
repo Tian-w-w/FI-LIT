@@ -24,6 +24,8 @@ def build_parser() -> argparse.ArgumentParser:
     manifest.add_argument("--output", required=True)
     manifest.add_argument("--splits", nargs="+", default=["train"])
     manifest.add_argument("--max-instances-per-task", type=int)
+    manifest.add_argument("--instances-per-task", type=int)
+    manifest.add_argument("--instance-seed", type=int, default=42)
 
     train_dev = commands.add_parser("build-superni-train-dev", help="Make task-disjoint train/dev manifests from SuperNI train tasks")
     train_dev.add_argument("--superni-root", required=True)
@@ -32,6 +34,8 @@ def build_parser() -> argparse.ArgumentParser:
     train_dev.add_argument("--dev-task-count", type=int, default=50)
     train_dev.add_argument("--seed", type=int, default=42)
     train_dev.add_argument("--max-instances-per-task", type=int)
+    train_dev.add_argument("--instances-per-task", type=int, help="Seeded random sample per task for a reported experiment")
+    train_dev.add_argument("--instance-seed", type=int, default=42)
 
     config = commands.add_parser("validate-config", help="Validate QLoRA/DDP YAML without loading a model")
     config.add_argument("--config", required=True)
@@ -46,9 +50,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     args = build_parser().parse_args(argv)
     try:
         if args.command == "build-superni-manifest":
-            _emit(build_manifest(args.superni_root, args.output, args.splits, args.max_instances_per_task))
+            _emit(build_manifest(args.superni_root, args.output, args.splits, args.max_instances_per_task, args.instances_per_task, args.instance_seed))
         elif args.command == "build-superni-train-dev":
-            _emit(build_train_dev_manifests(args.superni_root, args.train_output, args.dev_output, args.dev_task_count, args.seed, args.max_instances_per_task))
+            _emit(build_train_dev_manifests(args.superni_root, args.train_output, args.dev_output, args.dev_task_count, args.seed, args.max_instances_per_task, args.instances_per_task, args.instance_seed))
         elif args.command == "validate-config":
             config = load_config(args.config)
             validate_config(config)

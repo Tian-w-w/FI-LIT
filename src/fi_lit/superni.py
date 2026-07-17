@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import random
 from collections import Counter
 from pathlib import Path
@@ -47,11 +48,48 @@ def _as_text_list(value: Any) -> List[str]:
     raise SuperNIError("Each SuperNI instance Output must be a string or list of strings.")
 
 
+def _validate_instance_selection(
+    max_instances_per_task: Optional[int],
+    instances_per_task: Optional[int],
+    instance_seed: int,
+) -> None:
+    if max_instances_per_task is not None and max_instances_per_task < 1:
+        raise SuperNIError("max_instances_per_task must be positive when set.")
+    if instances_per_task is not None and instances_per_task < 1:
+        raise SuperNIError("instances_per_task must be positive when set.")
+    if max_instances_per_task is not None and instances_per_task is not None:
+        raise SuperNIError("Use either max_instances_per_task (smoke) or instances_per_task (seeded sampling), not both.")
+    if not isinstance(instance_seed, int) or isinstance(instance_seed, bool):
+        raise SuperNIError("instance_seed must be an integer.")
+
+
+def _select_instances(
+    instances: Sequence[Any],
+    task_id: str,
+    max_instances_per_task: Optional[int],
+    instances_per_task: Optional[int],
+    instance_seed: int,
+) -> Iterable[tuple]:
+    """Select original instance indices without relying on Python hash randomization."""
+    if max_instances_per_task is not None:
+        indices = range(min(max_instances_per_task, len(instances)))
+    elif instances_per_task is not None and len(instances) > instances_per_task:
+        seed_text = "{}:{}".format(instance_seed, task_id).encode("utf-8")
+        task_seed = int(hashlib.sha256(seed_text).hexdigest()[:16], 16)
+        indices = sorted(random.Random(task_seed).sample(range(len(instances)), instances_per_task))
+    else:
+        indices = range(len(instances))
+    for index in indices:
+        yield index, instances[index]
+
+
 def _records_for_task_ids(
     root: Path,
     task_ids: Sequence[str],
     split_label: str,
-    max_instances: Optional[int],
+    max_instances_per_task: Optional[int],
+    instances_per_task: Optional[int],
+    instance_seed: int,
 ) -> Iterable[Dict[str, Any]]:
     for task_id in task_ids:
         task_path = root / "tasks" / "{}.json".format(task_id)
@@ -69,8 +107,14 @@ def _records_for_task_ids(
         categories = task.get("Categories", [])
         if not isinstance(categories, list):
             categories = []
-        instances = task["Instances"] if max_instances is None else task["Instances"][:max_instances]
-        for index, instance in enumerate(instances):
+        instances = task["Instances"]
+        for index, instance in _select_instances(
+            instances,
+            task_id,
+            max_instances_per_task,
+            instances_per_task,
+            instance_seed,
+        ):
             if not isinstance(instance, Mapping) or not isinstance(instance.get("input"), str):
                 raise SuperNIError("Invalid instance {} in {}".format(index, task_path))
             yield {
@@ -89,6 +133,8 @@ def _write_manifest(
     output_path: Union[str, Path],
     partitions: Mapping[str, Sequence[str]],
     max_instances_per_task: Optional[int],
+    instances_per_task: Optional[int],
+    instance_seed: int,
 ) -> Dict[str, Any]:
     target = Path(output_path)
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -97,7 +143,14 @@ def _write_manifest(
     task_ids = set()
     with target.open("w", encoding="utf-8") as handle:
         for split_label, selected_task_ids in partitions.items():
-            for record in _records_for_task_ids(root, selected_task_ids, split_label, max_instances_per_task):
+            for record in _records_for_task_ids(
+                root,
+                selected_task_ids,
+                split_label,
+                max_instances_per_task,
+                instances_per_task,
+                instance_seed,
+            ):
                 handle.write(json.dumps(record, ensure_ascii=False) + "\n")
                 counts[split_label] += 1
                 task_ids.add(record["task_id"])
@@ -108,6 +161,11 @@ def _write_manifest(
         "tasks": len(task_ids),
         "examples_by_split": dict(sorted(counts.items())),
         "categories": dict(sorted(categories.items())),
+        "instance_selection": {
+            "mode": "prefix_smoke" if max_instances_per_task is not None else "seeded_random" if instances_per_task is not None else "all",
+            "instances_per_task": max_instances_per_task if max_instances_per_task is not None else instances_per_task,
+            "instance_seed": instance_seed if instances_per_task is not None else None,
+        },
     }
 
 
@@ -116,6 +174,8 @@ def build_manifest(
     output_path: Union[str, Path],
     splits: Sequence[str],
     max_instances_per_task: Optional[int] = None,
+    instances_per_task: Optional[int] = None,
+    instance_seed: int = 42,
 ) -> Dict[str, Any]:
     """Write an example-level JSONL manifest and return a compact summary.
 
@@ -123,13 +183,12 @@ def build_manifest(
     """
     if not splits:
         raise SuperNIError("At least one split is required.")
-    if max_instances_per_task is not None and max_instances_per_task < 1:
-        raise SuperNIError("max_instances_per_task must be positive when set.")
+    _validate_instance_selection(max_instances_per_task, instances_per_task, instance_seed)
     source_root = Path(root)
     if not source_root.is_dir():
         raise SuperNIError("SuperNI root does not exist: {}".format(source_root))
     partitions = {split: load_split_tasks(source_root, split) for split in splits}
-    return _write_manifest(source_root, output_path, partitions, max_instances_per_task)
+    return _write_manifest(source_root, output_path, partitions, max_instances_per_task, instances_per_task, instance_seed)
 
 
 def build_train_dev_manifests(
@@ -139,6 +198,8 @@ def build_train_dev_manifests(
     dev_task_count: int = 50,
     seed: int = 42,
     max_instances_per_task: Optional[int] = None,
+    instances_per_task: Optional[int] = None,
+    instance_seed: int = 42,
 ) -> Dict[str, Any]:
     """Create task-disjoint train/dev manifests from the official train split.
 
@@ -150,6 +211,7 @@ def build_train_dev_manifests(
         raise SuperNIError("SuperNI root does not exist: {}".format(source_root))
     if dev_task_count < 1:
         raise SuperNIError("dev_task_count must be positive.")
+    _validate_instance_selection(max_instances_per_task, instances_per_task, instance_seed)
     train_tasks = load_split_tasks(source_root, "train")
     if len(set(train_tasks)) != len(train_tasks):
         raise SuperNIError("The official train split contains duplicate task ids.")
@@ -160,12 +222,28 @@ def build_train_dev_manifests(
     held_out = set(random.Random(seed).sample(train_tasks, dev_task_count))
     train_partition = [task_id for task_id in train_tasks if task_id not in held_out]
     dev_partition = [task_id for task_id in train_tasks if task_id in held_out]
-    train_summary = _write_manifest(source_root, train_output_path, {"train": train_partition}, max_instances_per_task)
-    dev_summary = _write_manifest(source_root, dev_output_path, {"dev": dev_partition}, max_instances_per_task)
+    train_summary = _write_manifest(
+        source_root,
+        train_output_path,
+        {"train": train_partition},
+        max_instances_per_task,
+        instances_per_task,
+        instance_seed,
+    )
+    dev_summary = _write_manifest(
+        source_root,
+        dev_output_path,
+        {"dev": dev_partition},
+        max_instances_per_task,
+        instances_per_task,
+        instance_seed,
+    )
     return {
         "source_split": "train",
         "seed": seed,
         "dev_task_count": dev_task_count,
+        "instances_per_task": instances_per_task,
+        "instance_seed": instance_seed if instances_per_task is not None else None,
         "train": train_summary,
         "dev": dev_summary,
         "test_split_used": False,

@@ -36,7 +36,8 @@ The template asset manifest intentionally fails until its placeholder paths are 
       --superni-root /opt/fi-lit/datasets/natural-instructions \
       --train-output /opt/fi-lit/manifests/superni-train.jsonl \
       --dev-output /opt/fi-lit/manifests/superni-dev.jsonl \
-      --dev-task-count 50 --seed 42
+      --dev-task-count 50 --seed 42 \
+      --instances-per-task 100 --instance-seed 42
 
     CUDA_VISIBLE_DEVICES=0,1 torchrun --standalone --nproc_per_node=2 \
       -m fi_lit.train --config configs/qlora_ddp_superni.yaml
