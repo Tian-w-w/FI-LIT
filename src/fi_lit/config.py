@@ -67,6 +67,9 @@ def validate_config(config: Mapping[str, Any]) -> None:
     if not isinstance(training.get("learning_rate"), (int, float)) or training["learning_rate"] <= 0:
         raise ConfigError("'training.learning_rate' must be positive.")
     _positive_int(training.get("num_train_epochs"), "training.num_train_epochs")
+    max_steps = training.get("max_steps", -1)
+    if not isinstance(max_steps, int) or isinstance(max_steps, bool) or max_steps == 0 or max_steps < -1:
+        raise ConfigError("'training.max_steps' must be -1 or a positive integer.")
     if not isinstance(training.get("output_dir"), str) or not training["output_dir"].strip():
         raise ConfigError("'training.output_dir' must be a non-empty path string.")
 
@@ -112,6 +115,6 @@ def dry_run_plan(config: Mapping[str, Any], env: Optional[Mapping[str, str]] = N
         "output_dir": config["training"]["output_dir"],
         "quantization": config["model"]["quantization"],
         "lora_rank": config["model"]["lora"]["r"],
+        "max_steps": config["training"].get("max_steps", -1),
         "runtime": runtime,
     }
-

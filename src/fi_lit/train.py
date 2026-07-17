@@ -91,6 +91,7 @@ def run_training(config: Dict[str, Any]) -> None:
         gradient_accumulation_steps=config["training"]["gradient_accumulation_steps"],
         learning_rate=config["training"]["learning_rate"],
         num_train_epochs=config["training"]["num_train_epochs"],
+        max_steps=config["training"].get("max_steps", -1),
         warmup_ratio=config["training"]["warmup_ratio"],
         logging_steps=config["training"]["logging_steps"],
         save_steps=config["training"]["save_steps"],
@@ -131,4 +132,3 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

@@ -43,6 +43,8 @@ The template asset manifest intentionally fails until its placeholder paths are 
 
 Before the last command, inspect nvidia-smi, Python/Torch/CUDA compatibility, free disk space, the model format, and generated manifest counts. The launch command is documented only; it has not been run by this repository setup.
 
+For a one-GPU smoke test, copy the configuration to a private server-only file, set training.max_steps to 5, and launch with CUDA_VISIBLE_DEVICES=0. Do not use this five-step result as an experiment metric; restore max_steps to -1 for a deliberate full run.
+
 ## Reproducibility record
 
 For every server run, retain the Git commit SHA, copied configuration, private asset-manifest checksums, nvidia-smi output, package versions, command line, and resulting metrics. Do not add raw prompts, model checkpoints, or private filesystem paths to Git.

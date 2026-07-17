@@ -31,6 +31,8 @@ training:
   gradient_accumulation_steps: 16
   learning_rate: 0.0002
   num_train_epochs: 1
+  # -1 uses num_train_epochs for a full run. Set a small positive value only for smoke tests.
+  max_steps: -1
   warmup_ratio: 0.03
   logging_steps: 10
   save_steps: 200
@@ -45,4 +47,3 @@ ddp:
   launcher: torchrun
   expected_world_size: 2
   find_unused_parameters: false
-
