@@ -62,6 +62,8 @@ def validate_config(config: Mapping[str, Any]) -> None:
         if not isinstance(data.get(key), str) or not data[key].strip():
             raise ConfigError("'data.{}' must be a non-empty path string.".format(key))
     _positive_int(data.get("max_seq_length"), "data.max_seq_length")
+    if data.get("prompt_template") != "qwen_chat_completion_v1":
+        raise ConfigError("'data.prompt_template' must be 'qwen_chat_completion_v1' for the Qwen baseline.")
     for key in ("per_device_train_batch_size", "per_device_eval_batch_size", "gradient_accumulation_steps"):
         _positive_int(training.get(key), "training.{}".format(key))
     if not isinstance(training.get("learning_rate"), (int, float)) or training["learning_rate"] <= 0:

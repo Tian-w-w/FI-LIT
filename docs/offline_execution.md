@@ -46,6 +46,8 @@ Before the last command, inspect nvidia-smi, Python/Torch/CUDA compatibility, fr
 
 For a one-GPU smoke test, copy the configuration to a private server-only file, set training.max_steps to 5, and launch with CUDA_VISIBLE_DEVICES=0. Do not use this five-step result as an experiment metric; restore max_steps to -1 for a deliberate full run.
 
+The Qwen baseline uses qwen_chat_completion_v1 and trains only assistant-completion tokens; user instructions and inputs are masked from the loss. Existing adapters trained with a raw prompt or full-sequence loss are not comparable and must not be used for formal evaluation.
+
 ## 4. Select and evaluate an adapter
 
 Select the checkpoint with the lowest development metric, never the test metric. Build the official test manifest with the same deterministic per-task sampling policy, then generate greedily from the base model plus the selected adapter. The evaluator reports case/whitespace-normalized Exact Match and whitespace-token ROUGE-L F1, both as instance micro averages and task macro averages. These lexical scores are reproducible baseline diagnostics; task-family-specific metrics may be added for a final paper.

@@ -5,15 +5,48 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
-from typing import Any, Dict, Optional, Sequence
+from typing import Any, Dict, List, Mapping, Optional, Sequence
 
 from fi_lit.config import ConfigError, distributed_runtime, dry_run_plan, load_config, validate_config
 
 
-def _format_record(record: Dict[str, Any]) -> str:
+def _format_user_content(record: Mapping[str, Any]) -> str:
     definition = "\n".join(record.get("definition", []))
-    output = record.get("references", [""])[0]
-    return "Definition:\n{}\n\nInput:\n{}\n\nOutput:\n{}".format(definition, record["input"], output)
+    return "Definition:\n{}\n\nInput:\n{}".format(definition, record["input"])
+
+
+def _tokenize_completion_only(record: Mapping[str, Any], tokenizer: Any, max_seq_length: int) -> Dict[str, List[int]]:
+    """Render Qwen chat messages and mask the user prompt from causal-LM loss."""
+    user_content = _format_user_content(record)
+    target = record.get("references", [""])[0]
+    if not isinstance(target, str):
+        raise ConfigError("SuperNI reference outputs must be strings.")
+    prompt_ids = list(tokenizer.apply_chat_template(
+        [{"role": "user", "content": user_content}],
+        tokenize=True,
+        add_generation_prompt=True,
+    ))
+    full_ids = list(tokenizer.apply_chat_template(
+        [{"role": "user", "content": user_content}, {"role": "assistant", "content": target}],
+        tokenize=True,
+        add_generation_prompt=False,
+    ))
+    if full_ids[:len(prompt_ids)] != prompt_ids:
+        raise ConfigError("Tokenizer chat template does not preserve the generation prompt as a prefix.")
+    completion_ids = full_ids[len(prompt_ids):]
+    if not completion_ids:
+        raise ConfigError("Tokenizer chat template produced an empty assistant completion.")
+    if len(completion_ids) >= max_seq_length:
+        completion_ids = completion_ids[:max_seq_length]
+        prompt_ids = []
+    else:
+        prompt_ids = prompt_ids[:max_seq_length - len(completion_ids)]
+    input_ids = prompt_ids + completion_ids
+    return {
+        "input_ids": input_ids,
+        "attention_mask": [1] * len(input_ids),
+        "labels": [-100] * len(prompt_ids) + completion_ids,
+    }
 
 
 def _cleanup_distributed_process_group(torch_module: Any) -> None:
@@ -38,7 +71,7 @@ def run_training(config: Dict[str, Any]) -> None:
         import torch
         from datasets import load_dataset
         from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
-        from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig, DataCollatorForLanguageModeling, Trainer, TrainingArguments
+        from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig, DataCollatorForSeq2Seq, Trainer, TrainingArguments
     except ImportError as exc:
         raise RuntimeError("Install the private offline wheelhouse with the [train] extra before a real run.") from exc
 
@@ -84,11 +117,7 @@ def run_training(config: Dict[str, Any]) -> None:
     dataset = load_dataset("json", data_files={"train": str(train_path), "eval": str(eval_path)})
 
     def tokenize(record: Dict[str, Any]) -> Dict[str, Any]:
-        return tokenizer(
-            _format_record(record),
-            truncation=True,
-            max_length=config["data"]["max_seq_length"],
-        )
+        return _tokenize_completion_only(record, tokenizer, config["data"]["max_seq_length"])
 
     tokenized = dataset.map(tokenize, remove_columns=dataset["train"].column_names)
     train_args = TrainingArguments(
@@ -115,7 +144,7 @@ def run_training(config: Dict[str, Any]) -> None:
         args=train_args,
         train_dataset=tokenized["train"],
         eval_dataset=tokenized["eval"],
-        data_collator=DataCollatorForLanguageModeling(tokenizer, mlm=False),
+        data_collator=DataCollatorForSeq2Seq(tokenizer, label_pad_token_id=-100, pad_to_multiple_of=8),
     )
     try:
         trainer.train()

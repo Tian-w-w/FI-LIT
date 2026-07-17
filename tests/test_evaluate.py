@@ -2,13 +2,25 @@ from __future__ import annotations
 
 import pytest
 
-from fi_lit.evaluate import EvaluationError, aggregate_scores, format_generation_prompt, rouge_l_f1, score_prediction
+from fi_lit.evaluate import EvaluationError, aggregate_scores, format_generation_prompt, render_qwen_generation_prompt, rouge_l_f1, score_prediction
 
 
-def test_prompt_matches_training_prefix_without_reference() -> None:
+def test_prompt_matches_training_user_content_without_reference() -> None:
     prompt = format_generation_prompt({"definition": ["Classify sentiment."], "input": "Fine", "references": ["Positive"]})
-    assert prompt == "Definition:\nClassify sentiment.\n\nInput:\nFine\n\nOutput:\n"
+    assert prompt == "Definition:\nClassify sentiment.\n\nInput:\nFine"
     assert "Positive" not in prompt
+
+
+class _FakeChatTokenizer:
+    def apply_chat_template(self, messages, tokenize, add_generation_prompt):
+        assert tokenize is False
+        assert add_generation_prompt is True
+        return "<user>{}</user><assistant>".format(messages[0]["content"])
+
+
+def test_generation_uses_qwen_chat_prefix() -> None:
+    prompt = render_qwen_generation_prompt({"definition": ["Classify."], "input": "Fine"}, _FakeChatTokenizer())
+    assert prompt == "<user>Definition:\nClassify.\n\nInput:\nFine</user><assistant>"
 
 
 def test_scoring_uses_best_reference_and_normalizes_whitespace() -> None:

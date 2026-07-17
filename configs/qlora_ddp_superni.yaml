@@ -22,7 +22,8 @@ data:
   train_manifest: /opt/fi-lit/manifests/superni-train.jsonl
   eval_manifest: /opt/fi-lit/manifests/superni-dev.jsonl
   max_seq_length: 2048
-  prompt_template: definition_input_output_v1
+  # Qwen chat serialization; loss is applied only to the assistant completion.
+  prompt_template: qwen_chat_completion_v1
 
 training:
   output_dir: /opt/fi-lit/outputs/qlora-ddp-superni

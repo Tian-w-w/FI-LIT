@@ -15,9 +15,18 @@ class EvaluationError(ValueError):
 
 
 def format_generation_prompt(record: Mapping[str, Any]) -> str:
-    """Use the training serialization without appending the reference output."""
+    """Return the user message shared by training and generation."""
     definition = "\n".join(record.get("definition", []))
-    return "Definition:\n{}\n\nInput:\n{}\n\nOutput:\n".format(definition, record["input"])
+    return "Definition:\n{}\n\nInput:\n{}".format(definition, record["input"])
+
+
+def render_qwen_generation_prompt(record: Mapping[str, Any], tokenizer: Any) -> str:
+    """Render the exact Qwen chat prefix used for completion-only training."""
+    return tokenizer.apply_chat_template(
+        [{"role": "user", "content": format_generation_prompt(record)}],
+        tokenize=False,
+        add_generation_prompt=True,
+    )
 
 
 def normalize_text(value: str) -> str:
@@ -192,7 +201,7 @@ def evaluate_superni(
     generated = 0
     with predictions.open("w", encoding="utf-8") as handle:
         for batch in _batches(_read_manifest(source, max_examples), batch_size):
-            prompts = [format_generation_prompt(record) for record in batch]
+            prompts = [render_qwen_generation_prompt(record, tokenizer) for record in batch]
             encoded = tokenizer(
                 prompts,
                 return_tensors="pt",
