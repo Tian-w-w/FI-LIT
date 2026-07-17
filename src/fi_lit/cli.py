@@ -7,6 +7,7 @@ import json
 from typing import Optional, Sequence
 
 from fi_lit.config import ConfigError, dry_run_plan, load_config, validate_config
+from fi_lit.evaluate import EvaluationError, evaluate_superni
 from fi_lit.offline import AssetManifestError, check_assets
 from fi_lit.superni import SuperNIError, build_manifest, build_train_dev_manifests
 
@@ -43,6 +44,18 @@ def build_parser() -> argparse.ArgumentParser:
 
     assets = commands.add_parser("check-assets", help="Validate local offline asset inventory")
     assets.add_argument("--manifest", required=True)
+
+    evaluate = commands.add_parser("evaluate-superni", help="Generate and score a local SuperNI manifest with a PEFT adapter")
+    evaluate.add_argument("--config", required=True)
+    evaluate.add_argument("--adapter", required=True)
+    evaluate.add_argument("--manifest", required=True)
+    evaluate.add_argument("--predictions", required=True)
+    evaluate.add_argument("--metrics", required=True)
+    evaluate.add_argument("--batch-size", type=int, default=4)
+    evaluate.add_argument("--max-new-tokens", type=int, default=128)
+    evaluate.add_argument("--max-input-tokens", type=int, default=2048)
+    evaluate.add_argument("--max-examples", type=int)
+    evaluate.add_argument("--log-every", type=int, default=100)
     return parser
 
 
@@ -61,7 +74,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             result = check_assets(args.manifest)
             _emit(result)
             return 0 if result["passed"] else 2
-    except (ConfigError, SuperNIError, AssetManifestError, OSError, json.JSONDecodeError) as exc:
+        elif args.command == "evaluate-superni":
+            _emit(evaluate_superni(args.config, args.adapter, args.manifest, args.predictions, args.metrics, args.batch_size, args.max_new_tokens, args.max_input_tokens, args.max_examples, args.log_every))
+    except (ConfigError, SuperNIError, AssetManifestError, EvaluationError, OSError, RuntimeError, json.JSONDecodeError) as exc:
         _emit({"valid": False, "error": str(exc)})
         return 2
     return 0
